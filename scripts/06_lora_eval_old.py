@@ -25,37 +25,25 @@ def main():
 
     lora_path = project_root / "models" / "lora_checkpoint"
 
-    # quantization_config = BitsAndBytesConfig(       # 旧版：fp16，和训练05的bf16不一致
-    #     load_in_4bit=True,
-    #     bnb_4bit_compute_dtype=torch.float16,
-    #     bnb_4bit_use_double_quant=True,
-    # )
-    quantization_config = BitsAndBytesConfig(          # 新版：bf16+nf4，和训练05保持一致
+    # bf16+nf4，和训练05保持一致
+    quantization_config = BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_compute_dtype=torch.bfloat16,
         bnb_4bit_use_double_quant=True,
         bnb_4bit_quant_type="nf4",
     )
-    # 推理时的量化配置应与训练时保持一致，
-    # 否则模型在「训练看到的数值表示」和「推理实际的数值表示」之间存在分布偏移，削弱微调收益
-
 
     print("正在加载模型...")
     model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
         str(model_path),
         quantization_config=quantization_config,
-        # torch_dtype=torch.float16,        # 旧版：和训练不一致
-        torch_dtype=torch.bfloat16,         # 新版：和训练05保持一致
+        torch_dtype=torch.bfloat16,
         device_map="auto",
     )
     processor = AutoProcessor.from_pretrained(str(model_path))
     print("模型加载完成")
 
-
-    # 挂载lora权重
     model = PeftModel.from_pretrained(model, str(lora_path))
-    # 基础模型不动，吧训练好的低秩适配器权重”贴“上去，推理时生效，这是PEFT推理的标准写法
-
 
     prompt = (
         "请分析这张驾驶场景图片，输出以下信息：\n"
@@ -99,23 +87,12 @@ def main():
                 generated_ids = model.generate(
                     **inputs,
                     max_new_tokens=256,
-                    repetition_penalty=1.2,   # 惩罚重复（Round3需1.5，Round2用1.2够了）
+                    repetition_penalty=1.2,   # Round2用1.2，Round3需1.5
                 )
-                # generate返回的是：输入 + 新生成拼在一起的完整序列
             generated_ids = generated_ids[:, inputs.input_ids.shape[1]:]
-            '''
-            切之前: [ p1, p2, ..., p10 | g1, g2, g3, g4, g5 ]
-            切之后: [                    g1, g2, g3, g4, g5 ]   ← 只剩模型新生成的
-            为什么要切？ 如果不切，下一步 decode 出来会把你输入的 prompt 原封不动也打印出来（「请分析这张驾驶场景图片，输出以下信息…」+ 模型的回答）。
-            你要的是「模型的回答」，不是「prompt + 回答」。
-            这是 VLM/LLM 推理的标准写法，几乎所有 Qwen/LLaMA 的推理脚本都这么切一刀。
-            '''
-
-            output_text = processor.batch_decode( # batch_decode永远返回列表
+            output_text = processor.batch_decode(
                 generated_ids, skip_special_tokens=True
             )[0]
-            # # 写法 B：用 decode（注意要取第 0 行）
-            # output = processor.decode(generated_ids[0], skip_special_tokens=True)
 
             results[filepath.name] = output_text
             print(f"  完成，输出长度: {len(output_text)} 字")
@@ -140,5 +117,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-# 切掉 prompt → id 转文字 → 去特殊符 → 存字典。其中第一行的切片是核心，是「只取模型回答」的关键操作。!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

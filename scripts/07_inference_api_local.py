@@ -1,25 +1,17 @@
 import sys
 import json
 import re
-from PIL import Image # 图片处理（打开，转RGB，缩放）
+from PIL import Image
 
 from pathlib import Path
 
 # 本机适配版：外接硬盘路径
-# _project_root = Path(__file__).resolve().parent.parent
-# _fix_dir = str(_project_root / "env" /  "lib" /  "python3.10" / "site_packages_fix")
-# if _fix_dir not in sys.path:
-#     sys.path.insert(0, _fix_dir)
 
-import torch      # GPU推理
-from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor, BitsAndBytesConfig  # 加载模型，处理器，量化配置
-from peft import PeftModel   # 挂载lora权重
-# from pathlib import Path
+import torch
+from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor, BitsAndBytesConfig
+from peft import PeftModel
 
 
-
-
-# 默认prompt（和训练数据04,推理06保持一致）
 DEFAULT_PROMPT = (
     "请分析这张驾驶场景图片，输出以下信息：\n"
     "1. 车道线数量和类型\n"
@@ -29,19 +21,18 @@ DEFAULT_PROMPT = (
 )
 
 
-
 class DrivingSceneAnalyzer:
     """加载模型 + LoRA, 输入图片输出四项分析"""
 
     def __init__(self, model_path, lora_path):
-        # 加载4bit量化模型 + LoRA权重（bf16+nf4, 和训练一般）
+        # bf16+nf4，和训练一致
         quantization_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_compute_dtype=torch.bfloat16,
             bnb_4bit_use_double_quant=True,
             bnb_4bit_quant_type="nf4",
         )
-        
+
         print("正在加载模型...")
         self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
             str(model_path),
@@ -55,15 +46,14 @@ class DrivingSceneAnalyzer:
         print("正在挂载LoRA权重...")
         self.model = PeftModel.from_pretrained(self.model, str(lora_path))
         print("LoRA挂载完成")
-        
+
 
     def analyze(self, image: Image.Image, prompt: str = None) -> str:
-        # 单张图推理：图片预测 -> messages -> generate -> 切片 -> decode
         if prompt is None:
             prompt = DEFAULT_PROMPT
-        
+
         image = image.convert("RGB")
-        image.thumbnail((800, 800))   # 缩放到800px以内（3050 4GB显存限制）
+        image.thumbnail((800, 800))
 
         messages = [
             {
@@ -74,41 +64,36 @@ class DrivingSceneAnalyzer:
                 ],
             }
         ]
-        text = self.processor.apply_chat_template(   # 把对话格式转成模型能理解的文本
+        text = self.processor.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
         )
 
-
         inputs = self.processor(
             text=[text], images=[image], padding=True, return_tensors="pt"
-        ).to(self.model.device)   # processor处理成tensor,放到GPU上
-
+        ).to(self.model.device)
 
         with torch.no_grad():
             generated_ids = self.model.generate(
                 **inputs,
-                max_new_tokens=256,       # 模型生产回答，最多512token
-                repetition_penalty=1.2,   # 惩罚重复（Round3需1.5，Round2用1.2够了）
+                max_new_tokens=256,
+                repetition_penalty=1.2,
             )
 
-            generated_ids = generated_ids[:, inputs.input_ids.shape[1]:]  # 先切片，切掉的是输入部分的数字
-            output_text = self.processor.batch_decode(   # # decode成人类可读文字，不decode的话是一串token id
+            generated_ids = generated_ids[:, inputs.input_ids.shape[1]:]
+            output_text = self.processor.batch_decode(
                 generated_ids, skip_special_tokens=True
             )[0]
-        
-            # 释放显存
-            del inputs, generated_ids  # 删掉推理过程中间的两个大tensor（输入张量+输出张量），释放他们占的GPU内存
-            torch.cuda.empty_cache()     # 告诉GPU把回收彻底清掉，还给系统
-            # 不写，跑一张图没事，但是跑50张图时显存会一点点堆积，最终OOM（显存不够报错）
 
-            # 后处理：切掉模型生成的垃圾尾巴（emoji、特殊符号、ASCII乱码等）
+            del inputs, generated_ids
+            torch.cuda.empty_cache()
+
             output_text = self._clean_output(output_text)
 
             return output_text
 
     @staticmethod
     def _clean_output(text):
-        """简单清理：匹配到明确垃圾标记就切掉，不过滤正常内容"""
+        """匹配到明确垃圾标记就切掉，不过滤正常内容"""
         garbage_markers = [
             r'[\U0001F300-\U0001F9FF]',          # emoji
             r'希望我的回答对你有所帮助',
@@ -136,7 +121,6 @@ class DrivingSceneAnalyzer:
 
 
     def analyze_batch(self, image_dir, output_file=None):
-        # 批量处理（复用06的逻辑）
         image_dir = Path(image_dir)
         image_paths = sorted(
             p for ext in ("*.jpg", "*.png", "*.jpeg") for p in image_dir.glob(ext)
@@ -160,24 +144,3 @@ class DrivingSceneAnalyzer:
             print(f"结果已保存到： {output_file}")
 
         return results
-
-
-
-        
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

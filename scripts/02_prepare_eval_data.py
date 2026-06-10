@@ -1,7 +1,7 @@
 """
 02_prepare_eval_data.py — 从nuScenes全量图片中预筛选200张候选评估图片
-作用：从34149张CAM_FRONT图片里，按时间段均匀采样200张，分散在不同scene和日期
-      用户再从这200张里人工挑选50张覆盖不同场景
+从34149张CAM_FRONT图片里，按时间段均匀采样200张，分散在不同scene和日期
+用户再从这200张里人工挑选50张覆盖不同场景
 用法：env/bin/python scripts/02_prepare_eval_data.py
 """
 import sys
@@ -18,51 +18,43 @@ sys.path = [p for p in sys.path if p != _user_site]
 
 
 def parse_image_info(filename):
-    """
-    从nuScenes文件名中提取信息
-    文件名格式：n008-2018-08-28-16-16-48-0400__CAM_FRONT__1535487570162404.jpg
-    返回：scene编号, 日期, 小时
-    """
+    """从nuScenes文件名中提取 scene编号, 日期, 小时"""
     match = re.match(r'(n\d+)-(\d{4})-(\d{2})-(\d{2})-(\d{2})-\d{2}-\d{2}', filename)
     if not match:
         return None, None, None
-    scene = match.group(1)  # 比如 n008
-    month = match.group(3)  # 比如 08
-    day = match.group(4)    # 比如 28
-    hour = match.group(5)   # 比如 16
-    date = f"{match.group(2)}-{month}-{day}"  # 比如 2018-08-28
+    scene = match.group(1)
+    month = match.group(3)
+    day = match.group(4)
+    hour = match.group(5)
+    date = f"{match.group(2)}-{month}-{day}"
     return scene, date, hour
 
 
 def classify_time_period(hour):
-    """
-    把小时分成3个时段，用于均匀采样
-    nuScenes CAM_FRONT的图片都在白天（10-19点）
-    """
+    """把小时分成3个时段：上午(10-12)、下午(13-15)、傍晚(16-19)"""
     h = int(hour)
     if 10 <= h <= 12:
         return "上午"
     elif 13 <= h <= 15:
         return "下午"
-    else:  # 16-19
+    else:
         return "傍晚"
 
 
 def main():
-    random.seed(42)  # 固定随机种子，保证每次运行结果一样
+    random.seed(42)
 
-    project_root = Path(__file__).resolve().parent.parent  # 项目根目录
-    source_folder = project_root / "data" / "samples" / "CAM_FRONT"  # 34149张原图
-    output_folder = project_root / "data" / "eval_candidates"  # 200张候选图输出目录
-    num_candidates = 200  # 目标候选图片数
+    project_root = Path(__file__).resolve().parent.parent
+    source_folder = project_root / "data" / "samples" / "CAM_FRONT"
+    output_folder = project_root / "data" / "eval_candidates"
+    num_candidates = 200
 
-    output_folder.mkdir(parents=True, exist_ok=True)  # 创建输出目录
+    output_folder.mkdir(parents=True, exist_ok=True)
 
-    all_images = sorted(source_folder.glob("*.jpg"))  # 收集所有jpg，排序
+    all_images = sorted(source_folder.glob("*.jpg"))
     print(f"源目录共 {len(all_images)} 张图片")
 
-    # 按 (scene, date, 时段) 分组
-    groups = defaultdict(list)  # key=(scene, date, 时段), value=[文件路径列表]
+    groups = defaultdict(list)
     for img_path in all_images:
         scene, date, hour = parse_image_info(img_path.name)
         if scene is None:
@@ -72,42 +64,36 @@ def main():
 
     print(f"共 {len(groups)} 个分组（scene×日期×时段）")
 
-    # 计算每组分配多少张
     num_groups = len(groups)
-    per_group = max(1, num_candidates // num_groups)  # 每组至少1张
+    per_group = max(1, num_candidates // num_groups)
     print(f"每组约选 {per_group} 张")
 
     candidates = []
     for key, images in sorted(groups.items()):
         scene, date, period = key
-        # 每组内均匀间隔采样，避免选到连续帧（连续帧场景几乎一样）
         n = min(per_group, len(images))
         step = len(images) // n if n > 0 else 1
         sampled = [images[i * step] for i in range(n) if i * step < len(images)]
         candidates.extend(sampled)
 
-    # 如果总数不够200，随机补充
     if len(candidates) < num_candidates:
         existing = set(candidates)
         remaining = [img for img in all_images if img not in existing]
         extra = random.sample(remaining, min(num_candidates - len(candidates), len(remaining)))
         candidates.extend(extra)
 
-    # 如果总数超过200，随机裁剪
     if len(candidates) > num_candidates:
         candidates = random.sample(candidates, num_candidates)
 
-    candidates.sort(key=lambda p: p.name)  # 按文件名排序
+    candidates.sort(key=lambda p: p.name)
 
-    # 复制到输出目录
     skipped = 0
     for img_path in candidates:
         try:
             shutil.copy2(img_path, output_folder / img_path.name)
         except OSError:
-            skipped += 1  # 跳过磁盘坏道读不了的文件
+            skipped += 1
 
-    # 打印统计
     period_count = defaultdict(int)
     scene_count = defaultdict(int)
     for img_path in candidates:

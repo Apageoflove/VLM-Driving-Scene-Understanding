@@ -74,7 +74,6 @@ for i, filepath in enumerate(image_paths, 1):
             text=[text], images=[image], padding=True, return_tensors="pt"
         ).to(model.device)
 
-        # 测试：看 256 token 实际生成多少 token id
         with torch.no_grad():
             generated_ids = model.generate(
                 **inputs,
@@ -90,7 +89,6 @@ for i, filepath in enumerate(image_paths, 1):
 
         results[filepath.name] = output_text
 
-        # 实时打印诊断
         char_count = len(output_text)
         status = "OK" if char_count < 400 else "LONG" if char_count < 800 else "LOOP"
         print(f"  [{status}] {char_count}字 / {actual_token_count} tokens")

@@ -19,11 +19,9 @@ from peft import LoraConfig, get_peft_model
 
 base = "/media/work/Additional3/Agent/opencode/基于VLM的智能驾驶场景结构化理解系统/"
 
-# 加载训练数据（只用5条测试）
 with open(base + "data/training_data.json") as f:
     training_data = json.load(f)[:5]
 
-# 加载模型（4bit量化）
 quantization_config = BitsAndBytesConfig(
     load_in_4bit=True,
     bnb_4bit_compute_dtype=torch.float16,
@@ -40,7 +38,6 @@ model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
 processor = AutoProcessor.from_pretrained(str(model_path), min_pixels=128*28*28, max_pixels=256*28*28)
 print("模型加载完成")
 
-# LoRA配置
 lora_config = LoraConfig(
     r=4,
     lora_alpha=8,
@@ -52,14 +49,13 @@ lora_config = LoraConfig(
 model = get_peft_model(model, lora_config)
 model.print_trainable_parameters()
 
-# 冻结视觉编码器，只训练语言模型的LoRA参数，省显存
+# 冻结视觉编码器，只训练语言模型的LoRA参数
 for param in model.base_model.model.model.visual.parameters():
     param.requires_grad = False
 
 model.enable_input_require_grads()
 model.gradient_checkpointing_enable()
 
-# 手动训练循环（不用SFTTrainer，省显存）
 optimizer = torch.optim.AdamW(model.parameters(), lr=2e-4)
 num_epochs = 3
 
@@ -70,7 +66,6 @@ for epoch in range(num_epochs):
     for i, sample in enumerate(training_data):
         messages = sample["messages"]
 
-        # 用processor处理对话（图片+文字）
         text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
         image_inputs = []
         for msg in messages:
@@ -87,12 +82,10 @@ for epoch in range(num_epochs):
             padding=True,
         ).to("cuda")
 
-        # 前向传播
         with torch.cuda.amp.autocast(dtype=torch.float16):
             outputs = model(**inputs)
             loss = outputs.loss
 
-        # 反向传播
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
@@ -105,7 +98,6 @@ for epoch in range(num_epochs):
     avg_loss = total_loss / len(training_data)
     print(f"Epoch {epoch+1} 完成, 平均loss={avg_loss:.4f}")
 
-# 保存LoRA权重
 model.save_pretrained(base + "models/lora_checkpoint")
 print("LoRA权重已保存！")
 
