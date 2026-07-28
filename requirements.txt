@@ -1,0 +1,83 @@
+# ============================================================
+# 基于VLM的智能驾驶场景结构化理解系统 — 环境依赖
+# Python 3.10 | torch 2.6.0+cu126 | transformers 5.7.0
+# ============================================================
+#
+# 一键安装命令（任选一个镜像源）：
+#
+#   清华源（推荐）：
+#   pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn
+#
+#   阿里云源：
+#   pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com
+#
+#   华为源：
+#   pip install -r requirements.txt -i https://repo.huaweicloud.com/repository/pypi/simple --trusted-host repo.huaweicloud.com
+#
+#   豆瓣源：
+#   pip install -r requirements.txt -i https://pypi.doubanio.com/simple/ --trusted-host pypi.doubanio.com
+#
+# 注意：torch需要单独装CUDA版本，见下方说明
+# ============================================================
+
+# === PyTorch（必须单独装，pip装CUDA版本）===
+# 先装torch+cuda，再装其他依赖
+# torch 2.6.0 + CUDA 12.6（GPU训练必须）
+# --extra-index-url https://download.pytorch.org/whl/cu126
+torch==2.6.0
+torchvision==0.21.0
+triton==3.2.0
+
+# === 核心模型框架 ===
+transformers==5.7.0
+peft==0.19.1
+accelerate==1.13.0
+bitsandbytes==0.49.2
+safetensors==0.7.0
+tokenizers==0.22.2
+trl==1.4.0
+datasets==4.8.5
+
+# === Qwen-VL专用 ===
+qwen-vl-utils==0.0.14
+
+# === 数据处理 ===
+numpy==1.26.4
+pandas==2.3.3
+pillow==12.2.0
+opencv-python-headless==4.11.0.86
+scipy==1.15.3
+scikit-learn==1.7.2
+matplotlib==3.10.9
+
+# === nuScenes数据集 ===
+nuscenes-devkit==1.2.0
+pycocotools==2.0.11
+pyquaternion==0.9.9
+shapely==2.0.7
+descartes==1.1.0
+
+# === Web框架 ===
+gradio==6.14.0
+fastapi==0.136.3
+uvicorn==0.48.0
+starlette==1.1.0
+
+# === 训练工具 ===
+wandb==0.27.0
+tensorboard==2.20.0
+
+# === 基础依赖 ===
+requests==2.33.1
+httpx==0.28.1
+pydantic==2.13.4
+PyYAML==6.0.3
+python-dateutil==2.9.0.post0
+tqdm==4.67.3
+filelock==3.29.0
+fsspec==2026.2.0
+huggingface_hub==1.12.0
+Jinja2==3.1.6
+regex==2026.4.4
+click==8.3.3
+packaging==26.0

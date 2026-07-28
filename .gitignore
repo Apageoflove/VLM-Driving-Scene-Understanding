@@ -1,0 +1,33 @@
+# 数据和模型（太大，不上传）
+data/
+models/
+env/
+
+# 二进制文件
+*.whl
+*.zip
+*.tar
+*.tar.gz
+
+# IDE 和工具配置
+.idea/
+.vscode/
+.claude/
+.codeartsdoer
+__pycache__/
+*.pyc
+
+# 备份
+scripts/bak/
+
+# 不上传到 GitHub 的文档（本地保留）
+docs/阶段记录/
+docs/代码复习/
+docs/知识手册/
+docs/问题总结/04_prepare_training_data_问题总结.md
+docs/问题总结/05_autodl云端训练踩坑记录.md
+docs/问题总结/05_lora_train_问题总结.md
+docs/问题总结/重复循环问题修复.md
+docs/问题总结/项目核心踩坑与排查记录_原始.md
+项目实战方法论.md
+txt/
