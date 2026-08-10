@@ -1,3 +1,5 @@
+
+
 # 基于VLM的智能驾驶场景结构化理解系统
 
 基于 **Qwen2.5-VL-3B-Instruct** + **QLoRA** 微调的驾驶场景结构化理解项目。输入一张驾驶场景图片，模型输出四项结构化分析：车道线、车辆、交通标志、驾驶风险。
@@ -86,6 +88,7 @@ modelscope download Qwen/Qwen2.5-VL-3B-Instruct --local_dir models/Qwen2.5-VL-3B
 本项目使用 [nuScenes](https://www.nuscenes.org/nuscenes) 自动驾驶数据集，需前往官网注册下载。
 
 生成训练数据（nuScenes 标注 → VLM 对话格式）：
+> ⚠️ 注意：脚本包含硬编码路径，运行前请打开 `scripts/04_prepare_training_data.py`，将 `base` 变量修改为你本地 nuScenes 数据集的实际存放路径。
 
 ```bash
 python scripts/04_prepare_training_data.py
