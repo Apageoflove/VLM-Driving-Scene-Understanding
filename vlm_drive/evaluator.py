@@ -53,6 +53,11 @@ def _bucket_vehicles(counts: dict[str, int]) -> dict[str, int]:
             if word in category:
                 bucketed[word] = bucketed.get(word, 0) + count
                 break
+        else:
+            # Generic wording the fine-tuned model uses ("三辆汽车") maps to
+            # the corresponding nuScenes bucket (vehicle.car -> 小汽车).
+            if "汽车" in category or "车辆" in category:
+                bucketed["小汽车"] = bucketed.get("小汽车", 0) + count
     return bucketed
 
 

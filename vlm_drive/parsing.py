@@ -34,6 +34,17 @@ _SECTION_RE = re.compile(
 
 # "2辆小汽车" / "3个行人" — the counting grammar shared by GT and predictions.
 _COUNT_RE = re.compile(r"(\d+)\s*[辆个只条]\s*([一-龥]+)")
+# Chinese numerals as emitted by the fine-tuned model: 三辆汽车 / 两辆卡车 / 一辆公交车
+_CN_NUM_MAP = {"一": 1, "一两": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
+_CN_COUNT_RE = re.compile(r"([一两三四五六七八九十])\s*[辆个只条]\s*([一-龥]+)")
+# Counted-object whitelist: the counting grammar is domain-specific, so a
+# count whose "category" contains no known object word (e.g. 一辆车距离约为
+# 50米 -> "车距离约为") is measurement prose, not an object count.
+_OBJECT_WORDS = ("汽车", "卡车", "公交", "巴士", "摩托", "自行", "单车", "行人", "路人", "交通锥", "锥桶", "锥")
+
+
+def _is_object_category(category: str) -> bool:
+    return any(word in category for word in _OBJECT_WORDS)
 _PEDESTRIAN_HINT = "行人"
 _VEHICLE_NONE_HINTS = ("无可见车辆", "没有车辆", "无车辆")
 _VEHICLE_PRESENT_HINTS = ("前方可见", "辆")
@@ -74,11 +85,74 @@ def extract_counts(text: str) -> dict[str, int]:
         category = match.group(2).strip()
         # Trim trailing punctuation glued to the category by sloppy spacing.
         category = category.rstrip("。，,；;、")
-        if not category:
+        if not category or not _is_object_category(category):
             continue
         counts[category] = counts.get(category, 0) + number
+    for match in _CN_COUNT_RE.finditer(text or ""):
+        number = _CN_NUM_MAP.get(match.group(1), 0)
+        category = match.group(2).strip().rstrip("。，,；;、")
+        if number and category and _is_object_category(category):
+            counts[category] = counts.get(category, 0) + number
     return counts
 
+
+
+_LINE_NUM_RE = re.compile(r"(?m)^\s*([1234])\s*[.、)．]")
+_SECTION_KEYWORDS = (
+    ("lane", ("车道",)),
+    ("vehicles", ("车辆", "汽车", "行人", "卡车", "公交", "摩托", "自行")),
+    ("signs", ("交通标志", "信号灯", "交通锥", "标志")),
+    ("risk", ("风险", "注意", "小心", "谨慎", "危险")),
+)
+
+
+def _classify_section_body(body: str) -> str:
+    """Classify a free-form numbered section by its keywords.
+
+    The fine-tuned model drifts from the trained header format in practice:
+    real lora_eval_results.json replies use "1. 车道线数量为..." (no colon),
+    "2. 前方有三辆汽车...", "3. 图中未显示交通标志或信号灯。". The strict
+    colon regex misses those, so numbered lines fall back to keyword
+    classification — order matters: risk keywords are checked last because
+    "注意" also appears inside vehicle descriptions.
+    """
+    for section, keywords in _SECTION_KEYWORDS:
+        for keyword in keywords:
+            if keyword in body:
+                return section
+    return ""
+
+
+def _parse_numbered_freeform(text: str, image: str) -> SceneAnalysis:
+    """Fallback parser for replies with numbered lines but free-form headers.
+
+    Section identity comes from the line number itself (1=lane 2=vehicles
+    3=signs 4=risk — the training contract), because free-form bodies
+    mention each other's vocabulary (a risk line legitimately contains
+    "车辆"). Keywords are only consulted when the numbering is absent.
+    """
+    analysis = SceneAnalysis(image=image, lane="", vehicles={}, signs={}, risk="", raw=text)
+    matches = list(_LINE_NUM_RE.finditer(text))
+    for idx, match in enumerate(matches):
+        start = match.end()
+        end = matches[idx + 1].start() if idx + 1 < len(matches) else len(text)
+        body = text[start:end].strip()
+        if not body:
+            continue
+        number = match.group(1)
+        section = {"1": "lane", "2": "vehicles", "3": "signs", "4": "risk"}.get(number, "") or _classify_section_body(body)
+        if section == "lane" and not analysis.lane:
+            analysis.lane = body
+        elif section == "vehicles":
+            counts = extract_counts(body)
+            if counts:
+                analysis.vehicles = counts
+        elif section == "signs":
+            if "锥" in body:
+                analysis.signs = {"交通锥": 1}
+        elif section == "risk" and not analysis.risk:
+            analysis.risk = body
+    return analysis
 
 def parse_text_sections(text: str, image: str = "") -> SceneAnalysis:
     """Parse the trained numbered format into a SceneAnalysis.
@@ -122,6 +196,10 @@ def parse_text_sections(text: str, image: str = "") -> SceneAnalysis:
         elif section == "risk":
             analysis.risk = body
 
+    if not matches:
+        # Strict colon format did not match (fine-tuned drift: numbered lines
+        # with free-form headers). Fall back to keyword classification.
+        return _parse_numbered_freeform(text, image)
     return analysis
 
 

@@ -274,3 +274,45 @@ class TestEvaluator(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestRealLoRAFormat(unittest.TestCase):
+    """Regression cases shaped by the actual lora_eval_results.json replies.
+
+    The fine-tuned model drifts from the trained colon format: numbered
+    lines with free-form headers, Chinese-numeral counts, and distance
+    prose inside the vehicle section. These tests pin the parser's
+    handling of each drift.
+    """
+
+    def test_freeform_numbered_reply(self):
+        reply = (
+            "1. 车道线数量为一条车道，车道线类型为黄色实线。\n"
+            "2. 前方有三辆汽车，距离分别为：左侧一辆车距离约为50米。\n"
+            "3. 图中未显示交通标志或信号灯。\n"
+            "4. 驾驶者需小心右侧来车，注意前方车辆的动态变化。"
+        )
+        analysis = parse_text_sections(reply, image="real.jpg")
+        self.assertEqual(validate(analysis), [])
+        self.assertEqual(analysis.vehicles, {"汽车": 3})
+        self.assertTrue(analysis.risk.startswith("驾驶者需小心"))
+
+    def test_distance_prose_not_counted(self):
+        self.assertEqual(extract_counts("左侧一辆车距离约为50米，中间一辆车距离约为70米"), {})
+
+    def test_chinese_numerals(self):
+        self.assertEqual(extract_counts("前方有三辆汽车，左侧两辆卡车"), {"汽车": 3, "卡车": 2})
+
+    def test_generic_car_alias_buckets_to_sedan(self):
+        from vlm_drive.evaluator import _bucket_vehicles
+        self.assertEqual(_bucket_vehicles({"汽车": 3}), {"小汽车": 3})
+
+    def test_real_file_end_to_end_if_present(self):
+        """If the real historical results file exists locally, parse-rate >= 0.8."""
+        from pathlib import Path
+        real = Path(__file__).resolve().parent.parent / "data" / "lora_eval_results.json"
+        if not real.exists():
+            self.skipTest("local data not present in this checkout")
+        records = json.loads(real.read_text(encoding="utf-8"))
+        ok = sum(1 for t in records.values() if not validate(parse_text_sections(t, image="x")))
+        self.assertGreaterEqual(ok / len(records), 0.8)
