@@ -37,14 +37,7 @@ _COUNT_RE = re.compile(r"(\d+)\s*[辆个只条]\s*([一-龥]+)")
 # Chinese numerals as emitted by the fine-tuned model: 三辆汽车 / 两辆卡车 / 一辆公交车
 _CN_NUM_MAP = {"一": 1, "一两": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
 _CN_COUNT_RE = re.compile(r"([一两三四五六七八九十])\s*[辆个只条]\s*([一-龥]+)")
-# Counted-object whitelist: the counting grammar is domain-specific, so a
-# count whose "category" contains no known object word (e.g. 一辆车距离约为
-# 50米 -> "车距离约为") is measurement prose, not an object count.
-_OBJECT_WORDS = ("汽车", "卡车", "公交", "巴士", "摩托", "自行", "单车", "行人", "路人", "交通锥", "锥桶", "锥")
-
-
-def _is_object_category(category: str) -> bool:
-    return any(word in category for word in _OBJECT_WORDS)
+from .categories import is_object_category as _is_object_category  # single vocabulary source
 _PEDESTRIAN_HINT = "行人"
 _VEHICLE_NONE_HINTS = ("无可见车辆", "没有车辆", "无车辆")
 _VEHICLE_PRESENT_HINTS = ("前方可见", "辆")

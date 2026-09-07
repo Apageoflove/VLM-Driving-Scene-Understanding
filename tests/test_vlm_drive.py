@@ -316,3 +316,25 @@ class TestRealLoRAFormat(unittest.TestCase):
         records = json.loads(real.read_text(encoding="utf-8"))
         ok = sum(1 for t in records.values() if not validate(parse_text_sections(t, image="x")))
         self.assertGreaterEqual(ok / len(records), 0.8)
+
+
+class TestVocabularyConsistency(unittest.TestCase):
+    """categories.py is the single vocabulary source — these pin its invariants."""
+
+    def test_aliases_target_canonical_buckets(self):
+        from vlm_drive.categories import SURFACE_ALIASES, VEHICLE_CN, PEDESTRIAN_CN, SIGN_CN
+        buckets = set(VEHICLE_CN) | set(PEDESTRIAN_CN) | set(SIGN_CN)
+        for alias, target in SURFACE_ALIASES.items():
+            self.assertIn(target, buckets, f"alias {alias!r} targets unknown bucket {target!r}")
+
+    def test_buckets_derived_from_nuscenes_map(self):
+        from vlm_drive.categories import NUSCENES_CATEGORY_CN, VEHICLE_CN
+        self.assertEqual(
+            VEHICLE_CN,
+            tuple(n for k, n in NUSCENES_CATEGORY_CN.items() if k.startswith("vehicle.")),
+        )
+
+    def test_canonicalize_rejects_prose(self):
+        from vlm_drive.categories import canonicalize
+        self.assertEqual(canonicalize("车距离约为"), "")
+        self.assertEqual(canonicalize("三辆汽车里的汽车"), "小汽车")

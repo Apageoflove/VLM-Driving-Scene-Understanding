@@ -15,6 +15,7 @@ this CLI is the maintained path for everything downstream of a checkpoint.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -30,6 +31,17 @@ def _cmd_infer(args: argparse.Namespace) -> int:
     )
     analyzer.load_model()
     analyzer.analyze_folder(args.images, args.out, limit=args.limit)
+    return 0
+
+
+def _cmd_gt(args: argparse.Namespace) -> int:
+    from .gt import build_gt
+
+    gt = build_gt(args.nuscenes, args.images, min_visibility=args.min_visibility)
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(gt, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"真值生成：{len(gt)} 张 -> {out}")
     return 0
 
 
@@ -57,6 +69,14 @@ def build_parser() -> argparse.ArgumentParser:
     infer.add_argument("--repair", type=int, default=1, help="json 模式解析失败后的重试次数（默认 1）")
     infer.add_argument("--limit", type=int, default=None, help="只处理前 N 张（调试用）")
     infer.set_defaults(func=_cmd_infer)
+
+    gt = sub.add_parser("gt", help="从本地 nuScenes 标注生成评估集真值（04 生成器格式）")
+    gt.add_argument("--nuscenes", required=True, help="nuScenes 表目录，如 data/v1.0-trainval")
+    gt.add_argument("--images", required=True, help="评估图片目录")
+    gt.add_argument("--out", required=True, help="输出 GT JSON 路径")
+    gt.add_argument("--min-visibility", type=int, default=1, choices=[1, 2, 3, 4],
+                    help="nuScenes 可见度门槛 1-4（默认 1=不过滤；4=只保留 80-100% 可见物体，最贴近前摄视野）")
+    gt.set_defaults(func=_cmd_gt)
 
     evaluate = sub.add_parser("evaluate", help="预测结果 vs nuScenes 标注的自动评分")
     evaluate.add_argument("--pred", required=True, help="预测结果 JSON（新版结构化记录或旧版裸文本均可）")

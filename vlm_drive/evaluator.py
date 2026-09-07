@@ -23,12 +23,12 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from .categories import PEDESTRIAN_CN, SIGN_CN, VEHICLE_CN, canonicalize
 from .parsing import parse_ground_truth, parse_text_sections
 from .schema import SceneAnalysis, validate
 
-VEHICLE_BUCKET_WORDS = ("小汽车", "卡车", "公交车", "摩托车", "自行车")
-PEDESTRIAN_WORD = "行人"
-CONE_WORD = "交通锥"
+PEDESTRIAN_WORD = PEDESTRIAN_CN[0]
+CONE_WORD = SIGN_CN[0]
 
 
 def _as_analysis(record: Any, image: str) -> SceneAnalysis:
@@ -47,17 +47,16 @@ def _as_analysis(record: Any, image: str) -> SceneAnalysis:
 
 
 def _bucket_vehicles(counts: dict[str, int]) -> dict[str, int]:
+    """Bucket surface categories via the shared vocabulary (categories.py).
+
+    Direct bucket names match by substring; model drift (汽车/车辆/...) maps
+    through SURFACE_ALIASES inside canonicalize().
+    """
     bucketed: dict[str, int] = {}
     for category, count in counts.items():
-        for word in VEHICLE_BUCKET_WORDS:
-            if word in category:
-                bucketed[word] = bucketed.get(word, 0) + count
-                break
-        else:
-            # Generic wording the fine-tuned model uses ("三辆汽车") maps to
-            # the corresponding nuScenes bucket (vehicle.car -> 小汽车).
-            if "汽车" in category or "车辆" in category:
-                bucketed["小汽车"] = bucketed.get("小汽车", 0) + count
+        canonical = canonicalize(category)
+        if canonical in VEHICLE_CN:
+            bucketed[canonical] = bucketed.get(canonical, 0) + count
     return bucketed
 
 
@@ -104,7 +103,7 @@ def evaluate(
         row: dict[str, Any] = {"image": image, "parsed": pred_valid}
 
         vehicle_details: dict[str, dict[str, int]] = {}
-        for word in VEHICLE_BUCKET_WORDS:
+        for word in VEHICLE_CN:
             p, g = pred_v.get(word, 0), gt_v.get(word, 0)
             category_exact[word].append(1 if p == g else 0)
             category_ae[word].append(abs(p - g))
