@@ -179,3 +179,33 @@ results = analyzer.analyze_batch("data/eval_images/", output_file="results.json"
 ## License
 
 MIT
+
+## v0.2：结构化输出管线与自动评估（vlm_drive 包）
+
+> 大版本更新：项目从"脚本集合 + 人工打分"升级为"结构化管线 + 自动评估"。训练流程（04/05 编号脚本）保持不变，推理与评估全部迁移到 `vlm_drive` 包。
+
+### 解决的三个核心问题
+
+1. 输出不再是非结构化文本。旧管线把模型原文（甚至 `[错误] ...`）直接存进 JSON；现在每张图产出带 schema 校验的结构化记录（车道线 / 车辆计数 / 交通标志 / 风险），解析失败有一次自动修复重试，最终失败记为显式 error 记录。
+2. 评估不再靠人工。`项目方案.md` 里的"四维度人工打分"由 evaluator 接管：结构化成功率、有无车辆/行人/交通锥命中率、按类别计数一致率与 MAE，一键产出 Markdown 报告（见 `examples/eval_demo/report.md`）。
+3. 三份复制粘贴的推理循环合一。01/03/06 三个脚本的重复逻辑合并为 `DrivingSceneAnalyzer` 一个类，支持 base/LoRA、断点续跑、可注入生成函数（CPU 环境可测试）。
+
+### 快速使用
+
+```bash
+# 推理（LoRA 权重，断点续跑——中断后重跑只处理剩余图片）
+python -m vlm_drive infer --model models/Qwen2.5-VL-3B-Instruct --lora models/lora_round3 \
+  --images data/eval_images --out data/lora_eval_results.json
+
+# 自动评估（预测 vs nuScenes 标注，旧版裸文本输出也兼容）
+python -m vlm_drive evaluate --pred data/lora_eval_results.json \
+  --gt data/eval_gt.json --report data/report.md
+```
+
+### 测试
+
+```bash
+python -m unittest discover tests   # 31 项，纯 CPU、零 GPU 依赖
+```
+
+覆盖：训练格式解析（含编号变体/缺段）、JSON 修复（代码围栏/散文前缀/尾逗号/单引号/截断）、schema 校验、修复重试循环、生成失败降级、断点续跑、评估器各维度计分。
