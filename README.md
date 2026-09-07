@@ -197,6 +197,9 @@ MIT
 python -m vlm_drive infer --model models/Qwen2.5-VL-3B-Instruct --lora models/lora_round3 \
   --images data/eval_images --out data/lora_eval_results.json
 
+# 评估集真值（从本地 nuScenes 标注生成，04 生成器格式；--min-visibility 过滤 360° 标注中严重遮挡的物体）
+python -m vlm_drive gt --nuscenes data/v1.0-trainval --images data/eval_images --out data/eval_gt.json --min-visibility 4
+
 # 自动评估（预测 vs nuScenes 标注，旧版裸文本输出也兼容）
 python -m vlm_drive evaluate --pred data/lora_eval_results.json \
   --gt data/eval_gt.json --report data/report.md
