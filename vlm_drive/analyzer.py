@@ -64,6 +64,7 @@ class DrivingSceneAnalyzer:
         output_format: str = "text",
         repair_loop: int = 1,
         max_new_tokens: int = 512,
+        repetition_penalty: float | None = None,
         max_image_size: int = 800,
         generate_fn: Callable[[Any, str], str] | None = None,
     ) -> None:
@@ -74,6 +75,7 @@ class DrivingSceneAnalyzer:
         self.output_format = output_format
         self.repair_loop = repair_loop
         self.max_new_tokens = max_new_tokens
+        self.repetition_penalty = repetition_penalty
         self.max_image_size = max_image_size
         self.generate_fn = generate_fn
         self._model = None
@@ -134,10 +136,23 @@ class DrivingSceneAnalyzer:
         ]
         text = self._processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         inputs = self._processor(text=[text], images=[image], padding=True, return_tensors="pt").to(self._model.device)
+        generate_kwargs: dict = {"max_new_tokens": self.max_new_tokens}
+        if self.repetition_penalty is not None:
+            # The local 4GB deployment sets 1.2 to stop repetition loops on
+            # long descriptions; None keeps the transformers default.
+            generate_kwargs["repetition_penalty"] = self.repetition_penalty
         with torch.no_grad():
-            generated_ids = self._model.generate(**inputs, max_new_tokens=self.max_new_tokens)
+            generated_ids = self._model.generate(**inputs, **generate_kwargs)
         generated_ids = generated_ids[:, inputs.input_ids.shape[1] :]
         return self._processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+
+    def generate_text(self, image: Any, prompt: str | None = None) -> str:
+        """Raw-text generation with an optional prompt override.
+
+        Serves the API script (07) and the demo's raw view; analyze() builds
+        the structured record on top of this.
+        """
+        return self._generate(image, prompt if prompt is not None else self.prompt)
 
     def analyze(self, image: Any, image_name: str = "") -> dict[str, Any]:
         """Analyze one image; always returns a JSON-serializable dict.

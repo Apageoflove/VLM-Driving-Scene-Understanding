@@ -338,3 +338,70 @@ class TestVocabularyConsistency(unittest.TestCase):
         from vlm_drive.categories import canonicalize
         self.assertEqual(canonicalize("车距离约为"), "")
         self.assertEqual(canonicalize("三辆汽车里的汽车"), "小汽车")
+
+
+class TestDemoIntegration(unittest.TestCase):
+    """CPU-testable pieces of the two serving ends (07 API / 08 demo)."""
+
+    def test_render_ok_record(self):
+        from vlm_drive.render import analysis_to_markdown
+        record = {
+            "parse_status": "ok", "image": "a.jpg", "lane": "双车道",
+            "vehicles": {"小汽车": 2, "行人": 1}, "signs": {}, "risk": "保持车距",
+        }
+        md = analysis_to_markdown(record)
+        self.assertIn("车道线", md)
+        self.assertIn("小汽车×2", md)
+        self.assertIn("行人×1", md)
+
+    def test_render_partial_record_shows_errors(self):
+        from vlm_drive.render import analysis_to_markdown
+        record = {"parse_status": "partial", "lane": "x", "vehicles": {}, "signs": {},
+                  "risk": "", "errors": ["risk: empty risk description"]}
+        md = analysis_to_markdown(record)
+        self.assertIn("字段有缺失", md)
+        self.assertIn("risk", md)
+
+    def test_render_error_record(self):
+        from vlm_drive.render import analysis_to_markdown
+        md = analysis_to_markdown({"parse_status": "error", "errors": ["generation failed: OOM"], "raw": ""})
+        self.assertIn("解析失败", md)
+        self.assertIn("OOM", md)
+
+    def test_metrics_table_rows_shape(self):
+        from vlm_drive.evaluator import evaluate, metrics_table_rows
+        gt = {"a.jpg": trained_format_reply()}
+        result = evaluate({k: parse_text_sections(v, image=k).to_dict() for k, v in gt.items()}, gt)
+        rows = metrics_table_rows(result["metrics"])
+        self.assertTrue(all(len(r) == 2 for r in rows))
+        labels = [r[0] for r in rows]
+        self.assertIn("结构化成功率", labels)
+        self.assertIn("小汽车 计数MAE", labels)
+
+    def test_generate_text_uses_training_prompt(self):
+        captured = {}
+
+        def generate_fn(image, prompt):
+            captured["prompt"] = prompt
+            return "raw"
+
+        analyzer = DrivingSceneAnalyzer("m", generate_fn=generate_fn)
+        self.assertEqual(analyzer.generate_text("img"), "raw")
+        self.assertEqual(captured["prompt"], TRAINING_PROMPT)
+
+    def test_generate_text_prompt_override(self):
+        captured = {}
+
+        def generate_fn(image, prompt):
+            captured["prompt"] = prompt
+            return "raw"
+
+        analyzer = DrivingSceneAnalyzer("m", generate_fn=generate_fn)
+        analyzer.generate_text("img", prompt="自定义")
+        self.assertEqual(captured["prompt"], "自定义")
+
+    def test_repetition_penalty_accepted(self):
+        # 构造接受 + 默认 None（真实透传发生在 transformers generate 调用里）
+        analyzer = DrivingSceneAnalyzer("m", repetition_penalty=1.2)
+        self.assertEqual(analyzer.repetition_penalty, 1.2)
+        self.assertIsNone(DrivingSceneAnalyzer("m").repetition_penalty)
