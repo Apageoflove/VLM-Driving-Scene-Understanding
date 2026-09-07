@@ -213,3 +213,21 @@ def evaluate_files(predictions_path: str | Path, ground_truth_path: str | Path, 
         metrics_path = Path(report_path).with_suffix(".metrics.json")
         metrics_path.write_text(json.dumps(result["metrics"], ensure_ascii=False, indent=2), encoding="utf-8")
     return result
+
+
+def metrics_table_rows(metrics: dict[str, Any]) -> list[list[str]]:
+    """Flatten metrics into label/value rows for the Gradio demo's table."""
+    rows = [
+        ["结构化成功率", f"{metrics['parse_success_rate']:.1%}"],
+        ["车道线字段覆盖率", f"{metrics['lane_coverage']:.1%}"],
+        ["风险字段覆盖率", f"{metrics['risk_coverage']:.1%}"],
+        ["有无车辆判断准确率", f"{metrics['vehicle_presence_accuracy']:.1%}"],
+        ["行人有无命中率", f"{metrics['pedestrian_hit_rate']:.1%}"],
+        ["交通锥有无命中率", f"{metrics['cone_presence_hit_rate']:.1%}"],
+    ]
+    for word, stat in metrics["vehicle_count"].items():
+        exact = "—" if stat["exact_match_rate"] is None else f"{stat['exact_match_rate']:.1%}"
+        mae = "—" if stat["count_mae"] is None else f"{stat['count_mae']:.2f}"
+        rows.append([f"{word} 计数一致率", exact])
+        rows.append([f"{word} 计数MAE", mae])
+    return rows
