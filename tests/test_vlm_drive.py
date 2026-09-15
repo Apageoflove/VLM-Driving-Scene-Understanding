@@ -405,3 +405,5 @@ class TestDemoIntegration(unittest.TestCase):
         analyzer = DrivingSceneAnalyzer("m", repetition_penalty=1.2)
         self.assertEqual(analyzer.repetition_penalty, 1.2)
         self.assertIsNone(DrivingSceneAnalyzer("m").repetition_penalty)
+
+

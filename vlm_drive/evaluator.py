@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from .categories import PEDESTRIAN_CN, SIGN_CN, VEHICLE_CN, canonicalize
+
 from .parsing import parse_ground_truth, parse_text_sections
 from .schema import SceneAnalysis, validate
 
