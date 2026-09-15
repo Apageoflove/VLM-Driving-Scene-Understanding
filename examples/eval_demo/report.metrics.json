@@ -1,0 +1,32 @@
+{
+  "images_evaluated": 4,
+  "images_missing_prediction": [],
+  "parse_success_rate": 0.75,
+  "lane_coverage": 1.0,
+  "risk_coverage": 0.75,
+  "vehicle_presence_accuracy": 0.75,
+  "pedestrian_hit_rate": 1.0,
+  "cone_presence_hit_rate": 1.0,
+  "vehicle_count": {
+    "小汽车": {
+      "exact_match_rate": 0.5,
+      "count_mae": 0.5
+    },
+    "卡车": {
+      "exact_match_rate": 1.0,
+      "count_mae": 0.0
+    },
+    "公交车": {
+      "exact_match_rate": 1.0,
+      "count_mae": 0.0
+    },
+    "摩托车": {
+      "exact_match_rate": 1.0,
+      "count_mae": 0.0
+    },
+    "自行车": {
+      "exact_match_rate": 1.0,
+      "count_mae": 0.0
+    }
+  }
+}
