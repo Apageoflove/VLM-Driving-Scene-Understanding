@@ -24,6 +24,10 @@ from pathlib import Path
 from typing import Any
 
 from .categories import PEDESTRIAN_CN, SIGN_CN, VEHICLE_CN, canonicalize
+from .categories import SURFACE_ALIASES
+
+VEHICLE_TEXT_HINTS = ("车辆", "小汽车", "卡车", "公交", "摩托", "自行车", "汽车")
+VEHICLE_NEGATION_HINTS = ("无可见车辆", "没有车辆", "无车辆", "不见车辆")
 
 from .parsing import parse_ground_truth, parse_text_sections
 from .schema import SceneAnalysis, validate
@@ -115,7 +119,14 @@ def evaluate(
         ped_hits.append(1 if ped_p == ped_g else 0)
         row["pedestrian"] = {"pred": ped_p, "gt": ped_g}
 
-        presence_p, presence_g = bool(pred_v), bool(gt_v)
+        # Presence: prefer counts; fall back to raw-text keyword check for
+        # descriptive outputs (issue #8: 45/50 real outputs describe vehicles
+        # without the counting grammar, scoring them as "no vehicle").
+        presence_p = bool(pred_v) or (
+            any(w in pred.raw for w in VEHICLE_TEXT_HINTS)
+            and not any(neg in pred.raw for neg in VEHICLE_NEGATION_HINTS)
+        )
+        presence_g = bool(gt_v)
         vehicle_presence_hits.append(1 if presence_p == presence_g else 0)
         row["vehicle_presence"] = {"pred": presence_p, "gt": presence_g}
 
