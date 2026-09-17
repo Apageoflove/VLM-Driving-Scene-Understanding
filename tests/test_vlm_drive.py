@@ -254,6 +254,35 @@ class TestEvaluator(unittest.TestCase):
         result = evaluate(dict(self.GT), self.GT)  # pass GT strings as "predictions"
         self.assertEqual(result["metrics"]["parse_success_rate"], 1.0)
 
+    def test_presence_fallback_scoped_to_vehicle_section(self):
+        """Issue #8: risk-section wording must not flip the presence verdict.
+
+        "注意后方车辆" sits in section 4; the vehicles section describes
+        position without the counting grammar. Presence should be True via
+        the vehicle section, and the same wording in a vehicle-less scene
+        must NOT count as presence just because risk mentions 车辆.
+        """
+        gt = {
+            "p1.jpg": trained_format_reply(vehicles="2辆小汽车。无行人。", signs="无交通标志或信号灯。"),
+            "p2.jpg": trained_format_reply(vehicles="前方无可见车辆。无行人。", signs="无交通标志或信号灯。"),
+        }
+        descriptive = {
+            "p1.jpg": trained_format_reply(vehicles="前方车辆位于道路右侧。无行人。", signs="无交通标志或信号灯。", risk="注意后方车辆。"),
+            "p2.jpg": trained_format_reply(vehicles="前方未见车辆通行。无行人。", signs="无交通标志或信号灯。", risk="注意后方车辆。"),
+        }
+        result = evaluate(self._pred(descriptive), gt)
+        per_image = {row["image"]: row for row in result["per_image"]}
+        self.assertTrue(per_image["p1.jpg"]["vehicle_presence"]["pred"])  # section mention
+        self.assertFalse(per_image["p2.jpg"]["vehicle_presence"]["pred"])  # negation in section
+
+    def test_presence_fallback_falls_back_to_raw_without_section(self):
+        """Dict records without vehicle_section keep the whole-raw fallback."""
+        gt = {"p1.jpg": trained_format_reply(vehicles="1辆小汽车。无行人。", signs="无交通标志或信号灯。")}
+        legacy = {"p1.jpg": {"image": "p1.jpg", "lane": "直行", "vehicles": {}, "signs": {},
+                             "risk": "风险", "raw": "前方车辆位于道路右侧"}}
+        result = evaluate(legacy, gt)
+        self.assertTrue(result["per_image"][0]["vehicle_presence"]["pred"])
+
     def test_missing_prediction_reported(self):
         preds = self._pred({"p1.jpg": self.GT["p1.jpg"]})
         result = evaluate(preds, self.GT)

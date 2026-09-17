@@ -43,6 +43,11 @@ class SceneAnalysis:
     signs: dict[str, int] = field(default_factory=dict)
     risk: str = ""
     raw: str = ""
+    # Verbatim body of the vehicle section, when the source text had one.
+    # The evaluator's presence fallback matches keywords against THIS scope
+    # (not raw) so a "注意后方车辆" in the risk section cannot flip the
+    # presence verdict; see issue #8.
+    vehicle_section: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
