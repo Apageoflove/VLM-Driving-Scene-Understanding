@@ -137,6 +137,7 @@ def _parse_numbered_freeform(text: str, image: str) -> SceneAnalysis:
         if section == "lane" and not analysis.lane:
             analysis.lane = body
         elif section == "vehicles":
+            analysis.vehicle_section = body
             counts = extract_counts(body)
             if counts:
                 analysis.vehicles = counts
@@ -167,6 +168,7 @@ def parse_text_sections(text: str, image: str = "") -> SceneAnalysis:
         if section == "lane":
             analysis.lane = body
         elif section == "vehicles":
+            analysis.vehicle_section = body
             counts = extract_counts(body)
             if counts:
                 analysis.vehicles = counts
@@ -285,8 +287,10 @@ def parse_json_output(text: str, image: str = "") -> tuple[SceneAnalysis, list[s
         return SceneAnalysis(image=image, raw=text or ""), ["json: output is not parseable JSON even after repair"]
 
     vehicles_raw = data.get("vehicles") or {}
+    vehicle_section = ""
     if isinstance(vehicles_raw, str):
         vehicles = extract_counts(vehicles_raw)
+        vehicle_section = vehicles_raw
     elif isinstance(vehicles_raw, dict):
         vehicles = {str(k): int(v) for k, v in vehicles_raw.items() if isinstance(v, (int, float))}
     else:
@@ -307,6 +311,7 @@ def parse_json_output(text: str, image: str = "") -> tuple[SceneAnalysis, list[s
         signs=signs,
         risk=str(data.get("risk") or ""),
         raw=text or "",
+        vehicle_section=vehicle_section,
     )
     errors = validate(analysis)
     return analysis, errors
